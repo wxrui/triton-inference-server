@@ -130,16 +130,21 @@ main(int argc, char** argv)
     exit(1);
   }
 
+  {
+    ni::TritonJson::Value server_metadata;
+    FAIL_IF_ERR(
+        client->ServerMetadata(&server_metadata, http_headers),
+        "unable to get server metadata");
 
-  rapidjson::Document server_metadata;
-  FAIL_IF_ERR(
-      client->ServerMetadata(&server_metadata, http_headers),
-      "unable to get server metadata");
-  if ((std::string(server_metadata["name"].GetString())).compare("triton") !=
-      0) {
-    std::cerr << "error: unexpected server metadata: "
-              << nic::GetJsonText(server_metadata) << std::endl;
-    exit(1);
+    const char* server_name;
+    size_t server_name_len;
+    FAIL_IF_ERR(
+        server_metadata.MemberAsString("name", &server_name, &server_name_len), "unable to get server name");
+    if (std::string(server_name, server_name_len).compare("triton") != 0) {
+      std::cerr << "error: unexpected server metadata: "
+                << nic::GetJsonText(server_metadata) << std::endl;
+      exit(1);
+    }
   }
 
 

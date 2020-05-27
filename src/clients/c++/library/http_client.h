@@ -36,6 +36,12 @@
 #include "rapidjson/stringbuffer.h"
 #include "src/clients/c++/library/common.h"
 
+#define TRITONJSON_STATUSTYPE nvidia::inferenceserver::client::Error
+#define TRITONJSON_STATUSRETURN(M) \
+  return nvidia::inferenceserver::client::Error(M)
+#define TRITONJSON_STATUSSUCCESS nvidia::inferenceserver::client::Error::Success
+#include "src/core/json.h"
+
 namespace nvidia { namespace inferenceserver { namespace client {
 
 class HttpInferRequest;
@@ -51,6 +57,7 @@ typedef std::map<std::string, std::string> Parameters;
 /// \param json_dom The json DOM object.
 /// \return Formatted string representation of passed JSON.
 std::string GetJsonText(const rapidjson::Document& json_dom);
+std::string GetJsonText(const TritonJson::Value& json_dom);
 
 //==============================================================================
 /// An InferenceServerHttpClient object is used to perform any kind of
@@ -116,7 +123,7 @@ class InferenceServerHttpClient : public InferenceServerClient {
       const Parameters& query_params = Parameters());
 
   /// Contact the inference server and get its metadata.
-  /// \param server_metadata Returns the server metadata as rapidJSON DOM
+  /// \param server_metadata Returns the server metadata as TritonJson DOM
   /// object.
   /// \param headers Optional map specifying additional HTTP headers to
   /// include in request.
@@ -124,7 +131,7 @@ class InferenceServerHttpClient : public InferenceServerClient {
   /// included with URL query.
   /// \return Error object indicating success or failure of the request.
   Error ServerMetadata(
-      rapidjson::Document* server_metadata, const Headers& headers = Headers(),
+      TritonJson::Value* server_metadata, const Headers& headers = Headers(),
       const Parameters& query_params = Parameters());
 
   /// Contact the inference server and get the metadata of specified model.
@@ -383,6 +390,10 @@ class InferenceServerHttpClient : public InferenceServerClient {
   Error Get(
       std::string& request_uri, const Headers& headers,
       const Parameters& query_params, rapidjson::Document* response,
+      long* http_code);
+  Error Get(
+      std::string& request_uri, const Headers& headers,
+      const Parameters& query_params, TritonJson::Value* response,
       long* http_code);
   Error Post(
       std::string& request_uri, const rapidjson::Document& request,

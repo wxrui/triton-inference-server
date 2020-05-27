@@ -34,27 +34,14 @@
 
 // This header can be used both within Triton server and externally
 // (i.e. in source that interacts only via TRITONSERVER API). Status
-// is handled differently in these two cases.
-#if defined(TRITONJSON_INTERNAL_STATUS)
-
-#include "src/core/status.h"
-#define TRITONJSON_STATUSTYPE Status
-#define TRITONJSON_STATUSRETURN(M) return Status(Status::Code::INTERNAL, (M))
-#define TRITONJSON_STATUSSUCCESS Status::Success
-
-#elif defined(TRITONJSON_TRITONSERVER_STATUS)
-
-#include "src/core/tritonserver.h"
-#define TRITONJSON_STATUSTYPE TRITONSERVER_Error*
-#define TRITONJSON_STATUSRETURN(M) \
-  return TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INTERNAL, (M).c_str())
-#define TRITONJSON_STATUSSUCCESS nullptr
-
-#else
-
-#error "Must set TRITONJSON_INTERNAL_STATUS or TRITONJSON_TRITONSERVER_STATUS"
-
-#endif
+// is handled differently in these cases so the following macros must
+// be defined before including this header. As an example the defines
+// are shown here as returned by the TRITONSERVER API.
+//
+//   #define TRITONJSON_STATUSTYPE TRITONSERVER_Error*
+//   #define TRITONJSON_STATUSRETURN(M)
+//        return TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INTERNAL, (M).c_str())
+//   #define TRITONJSON_STATUSSUCCESS nullptr
 
 namespace nvidia { namespace inferenceserver {
 

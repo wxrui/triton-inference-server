@@ -123,6 +123,14 @@ GetJsonText(const rapidjson::Document& json_dom)
   return buffer.GetString();
 }
 
+std::string
+GetJsonText(const TritonJson::Value& json_dom)
+{
+  TritonJson::WriteBuffer buffer;
+  json_dom.PrettyWrite(&buffer);
+  return std::move(buffer.MutableContents());
+}
+
 //==============================================================================
 
 class HttpInferRequest : public InferRequest {
@@ -577,7 +585,7 @@ InferenceServerHttpClient::IsModelReady(
 
 Error
 InferenceServerHttpClient::ServerMetadata(
-    rapidjson::Document* server_metadata, const Headers& headers,
+    TritonJson::Value* server_metadata, const Headers& headers,
     const Parameters& query_params)
 {
   Error err;
@@ -1398,6 +1406,84 @@ InferenceServerHttpClient::ResponseHandler(
   size_t result_bytes = size * nmemb;
   std::copy(buf, buf + result_bytes, std::back_inserter(*response_string));
   return result_bytes;
+}
+
+Error
+InferenceServerHttpClient::Get(
+    std::string& request_uri, const Headers& headers,
+    const Parameters& query_params, TritonJson::Value* response,
+    long* http_code)
+{
+  if (!query_params.empty()) {
+    request_uri = request_uri + "?" + GetQueryString(query_params);
+  }
+
+  if (!curl_global.Status().IsOk()) {
+    return curl_global.Status();
+  }
+
+  CURL* curl = curl_easy_init();
+  if (!curl) {
+    return Error("failed to initialize HTTP client");
+  }
+
+  curl_easy_setopt(curl, CURLOPT_URL, request_uri.c_str());
+  curl_easy_setopt(curl, CURLOPT_USERAGENT, "libcurl-agent/1.0");
+  if (verbose_) {
+    curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
+  }
+
+  // Response data handled by ResponseHandler()
+  std::string response_string;
+  response_string.reserve(256);
+  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, ResponseHandler);
+  curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response_string);
+
+  // Add user provided headers...
+  struct curl_slist* header_list = nullptr;
+  for (const auto& pr : headers) {
+    std::string hdr = pr.first + ": " + pr.second;
+    header_list = curl_slist_append(header_list, hdr.c_str());
+  }
+
+  if (header_list != nullptr) {
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, header_list);
+  }
+
+  CURLcode res = curl_easy_perform(curl);
+  if (res != CURLE_OK) {
+    curl_slist_free_all(header_list);
+    curl_easy_cleanup(curl);
+    return Error("HTTP client failed: " + std::string(curl_easy_strerror(res)));
+  }
+
+  curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, http_code);
+
+  curl_slist_free_all(header_list);
+  curl_easy_cleanup(curl);
+
+  if (!response_string.empty()) {
+    Error err =
+        response->Parse(response_string.c_str(), response_string.size());
+    if (!err.IsOk()) {
+      return err;
+    }
+
+    if (verbose_) {
+      std::cout << GetJsonText(*response) << std::endl;
+    }
+
+    const char* errstr;
+    size_t errlen;
+    err = response->MemberAsString("error", &errstr, &errlen);
+    if (!err.IsOk()) {
+      return err;
+    }
+
+    return Error(std::move(std::string(errstr, errlen)));
+  }
+
+  return Error::Success;
 }
 
 Error
